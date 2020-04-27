@@ -1,28 +1,8 @@
 from mesa.visualization.modules import CanvasGrid
 from mesa.visualization.ModularVisualization import ModularServer
+from mesa.visualization.UserParam import UserSettableParameter
 from AntModel import *
-
-
-def agent_portrayal(agent):
-    """
-    Determine how each agent type is portrayed on screen.
-    :param agent: The agent being portrayed
-    :return: A dictionary with attributes for how to display the agent.
-    """
-    portrayal = {"Shape": "circle",
-                 "Filled": "true"}
-    if type(agent) is LNiger:
-        portrayal["Layer"] = 0
-        portrayal["Color"] = "blue"
-        portrayal["r"] = 0.5
-    elif type(agent) is LNPheromone:
-        portrayal["Layer"] = 0
-        portrayal["Color"] = "green"
-        portrayal["r"] = 0.25
-        portrayal["text"] = agent.tracks
-        portrayal["text_color"] = "white"
-
-    return portrayal
+from Portrayals import agent_portrayal
 
 
 def main():
@@ -30,18 +10,23 @@ def main():
     The main running function.
     :return: 0 on success
     """
-    grid_width = 15
-    grid_height = 15
+    ln_slider = UserSettableParameter('slider', "Number of L. Niger Agents", 2, 0, 100, 1)
+    fj_slider = UserSettableParameter('slider', "Number of F. Japonica Agents", 2, 0, 100, 1)
+    mk_slider = UserSettableParameter('slider', "Number of M. Kuricola Colonies", 1, 0, 100, 1)
+    ft_slider = UserSettableParameter('slider', "Number of F. Tropicalis Colonies", 1, 0, 100, 1)
+
+    grid_width = 30
+    grid_height = 30
     # Instantiate the grid the agents will be moving on
     grid = CanvasGrid(agent_portrayal, grid_width, grid_height, 500, 500)
     # Open the visualization server
     server = ModularServer(AntModel,
                            [grid],
                            "L. Niger Model",
-                           {"num_ln": 3,
-                            "num_fj": 0,
-                            "num_mk_col":0,
-                            "num_ft_col":0,
+                           {"num_ln": ln_slider,
+                            "num_fj": fj_slider,
+                            "num_mk_col": mk_slider,
+                            "num_ft_col": ft_slider,
                             "width": grid_width,
                             "height": grid_height})
     server.port = 8521
