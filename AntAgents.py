@@ -1,6 +1,25 @@
 from mesa import Agent
 import numpy as np
 import random
+from enum import Enum
+
+DETAILED_ANALYSIS_SWITCH = 1
+
+
+class TrailState(Enum):
+    LIGHT = 0
+    MEDIUM = 0
+    HEAVY = 1
+
+
+class AggroState(Enum):
+    NO_THREAT = 0
+    FLEE = 1
+    NO_RESPONSE = 2
+    WEAK_RESPONSE = 3
+    LIGHT_BITE_FLEE = 4
+    BITE = 5
+    BITE_ACID = 6
 
 
 class Ant(Agent):
@@ -15,6 +34,8 @@ class LNiger(Ant):
 
     def __init__(self, unique_id, model):
         super().__init__(unique_id, model)
+        self.aggro_state = AggroState.NO_THREAT
+        self.trail_state = TrailState.LIGHT
 
     def step(self):
         """
@@ -59,7 +80,73 @@ class LNiger(Ant):
         self.model.grid.move_agent(self, new_position)
 
     def drop_pheromone(self, grid_location):
+        """
+        Drops a LNPheromone object at the specified location.
+        :param grid_location: Location to drop.
+        :return: None
+        """
         self.model.drop_pheromone(grid_location)
+
+    def get_number_nestmates_nearby(self, radius):
+        """
+        Gets the number of nestmates nearby self in radius 'radius'.
+        :param radius: Number of squares outward to search.
+        :return: int
+        """
+        return self.model.get_number_of_agents_in_radius(self.pos, radius, LNiger)
+
+    def get_number_threats_nearby(self, radius):
+        """
+        Gets the number of threats extant within radius 'radius'.
+        :param radius: Number of squares outward to search.
+        :return: int
+        """
+        return self.model.get_number_of_agents_in_radius(self.pos, radius, FJaponica)
+
+    def update_aggro_state(self):
+        """
+        Updates our aggressiveness state.
+        :return: None
+        """
+        if self.get_number_threats_nearby(2) == 0:
+            self.aggro_state = AggroState.NO_THREAT
+            return
+
+    def update_trail_state(self):
+        """
+        Updates our trail state - i.e. light, medium, or heavy.
+        :return: None
+        """
+        pheromones_on_grid = self.mode.get_all_of_agent_type(LNPheromone)
+        pheromone_counts = [t.trails for t in pheromones_on_grid]
+        max_pher = max(pheromone_counts)
+        light_limit = max_pher / 3
+        medium_limit = light_limit * 2
+        heavy_limit = max_pher
+
+        total_surrounding_pher = 0
+        surrounding_pher_count = 0
+        for agent in self.model.grid.get_neighbors(self.pos):
+            if isinstance(agent, LNPheromone):
+                total_surrounding_pher += agent.tracks
+                surrounding_pher_count += 1
+        average_surrounding_pher = total_surrounding_pher / surrounding_pher_count
+
+        if average_surrounding_pher <= light_limit:
+            self.trail_state = TrailState.LIGHT
+        elif light_limit < average_surrounding_pher <= medium_limit:
+            self.trail_state = TrailState.MEDIUM
+        elif medium_limit < average_surrounding_pher:
+            self.trail_state = TrailState.HEAVY
+
+    def update_state(self):
+        """
+        Update our internal state. We update our trail state first because our agressiveness,
+        depending on the factors we are considering, may depend on what type of trail we are on.
+        :return:
+        """
+        self.update_trail_state()
+        self.update_aggro_state()
 
 
 class FJaponica(Ant):

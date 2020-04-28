@@ -142,6 +142,29 @@ class AntModel(Model):
                 closest_neighbor_distance = dist
         return possible_cells[closest_neighbor_index]
 
+    def get_number_of_agents_in_radius(self, location, radius, agent_type):
+        """
+        Returns the number of agents of type agent_type within a radius (not including center) of location.
+        :param location: Location to search around.
+        :param radius: Radius to search.
+        :param agent_type: Type of agent to search for.
+        :return: int
+        """
+        total_agents = 0
+        for neighbor in self.grid.get_neighbors(pos=location, moore=True, include_center=False, radius=radius):
+            if isinstance(neighbor, agent_type):
+                total_agents += 1
+        return total_agents
+
+    def get_all_of_agent_type(self, agent_type):
+        """
+        Returns all instances of agents of type agent_type in the Grid.
+        :param agent_type: The type of agent to find.
+        :return: A list of agent objects.
+        """
+        return [x for x in self.grid.get_neighbors(pos=(0,0), moore=True, include_center=True, radius=self.grid.width)
+                if isinstance(x, agent_type)]
+
     def step(self):
         """
         A method called every step that occurs
