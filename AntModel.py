@@ -5,6 +5,8 @@ from AntAgents import *
 from AphidAgents import *
 from uuid import uuid4
 import numpy as np
+from mesa.datacollection import DataCollector
+from DataCollection import ant_state_collector
 
 
 class AntModel(Model):
@@ -17,6 +19,7 @@ class AntModel(Model):
         :param width: Width of the model grid
         :param height: Height of the model grid
         """
+        super().__init__()
         self.num_ln = num_ln
         self.num_fj = num_fj
         self.num_mk_col = num_mk_col
@@ -44,6 +47,9 @@ class AntModel(Model):
             colony = FTropicalisColony(uuid4(), self)
             self.schedule.add(colony)
             self.grid.place_agent(colony, self.grid.find_empty())
+
+        self.data_collector = DataCollector(model_reporters={},
+                                            agent_reporters={"State, Aggressiveness": ant_state_collector})
 
     def drop_pheromone(self, location):
         """
@@ -126,7 +132,7 @@ class AntModel(Model):
         """
         return np.sqrt((location_a[0] - location_b[0])**2 + (location_a[1] - location_a[1])**2)
 
-    def get_next_cell_in_direction_of_location(self, goal_cell, possible_cells):
+    def get_nearest_cell_to_goal(self, goal_cell, possible_cells):
         """
         Returns the cell from a list of possible cells which is closest to the end location.
         :param goal_cell: The goal cell of the agent
@@ -170,4 +176,5 @@ class AntModel(Model):
         A method called every step that occurs
         :return: None
         """
+        self.data_collector.collect(self)
         self.schedule.step()

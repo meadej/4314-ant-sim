@@ -1,15 +1,20 @@
-from mesa import Agent
-import numpy as np
 import random
 from enum import Enum
+import numpy as np
+from AphidAgents import *
 
-DETAILED_ANALYSIS_SWITCH = 1
+LIGHT_TRAIL_INTERVAL = range(6, 15)
+MEDIUM_TRAIL_INTERVAL = range(51, 64)
+HEAVY_TRAIL_INTERVAL = range(98, 127)
 
 
-class TrailState(Enum):
-    LIGHT = 0
-    MEDIUM = 0
-    HEAVY = 1
+class ActivityState(Enum):
+    TRAVEL_SOLO = 0
+    TRAVEL_LIGHT = 1
+    TRAVEL_MEDIUM = 2
+    TRAVEL_HEAVY = 3
+    TEND_MK = 4
+    TEND_FT = 5
 
 
 class AggroState(Enum):
@@ -35,7 +40,20 @@ class LNiger(Ant):
     def __init__(self, unique_id, model):
         super().__init__(unique_id, model)
         self.aggro_state = AggroState.NO_THREAT
-        self.trail_state = TrailState.LIGHT
+        self.activity_state = ActivityState.TRAVEL_SOLO
+
+        # A variable describing how attracted this ant is to aphid colonies and regular pheromones
+        self.colony_step_weight = 3
+        self.pheromone_step_weight = 3
+
+        # A variable describing the radius from which this ant will identify a threat
+        self.threat_search_radius = 2
+
+        # A variable describing the radius from which this ant will count "nearby" nestmates
+        self.nestmate_search_radius = 2
+
+        # A variable describing the radius an ant has to be at from a colony to be "tending" that colony
+        self.colony_search_radius = 2
 
     def step(self):
         """
@@ -49,35 +67,66 @@ class LNiger(Ant):
             include_center=False
         )
 
+        step_weights = self.calculate_step_weights(possible_steps)
+
+        step_weights = self.reduce_step_weights_above_threshold(50, step_weights)
+
+        # Drop a pheromone at our current position
+        self.drop_pheromone(self.pos)
+
+        # Choose a new position and move there
+        new_position = random.choices(possible_steps, weights=step_weights, k=1)[0]
+
+        self.model.grid.move_agent(self, new_position)
+
+        # Update internal states
+        self.update_state()
+
+    @staticmethod
+    def reduce_step_weights_above_threshold(threshold, weights):
+        """
+        A method to reduce the weights of steps that rise above a certain threshold. This method is useful for loop
+        avoidance, e.g. making sure an ant doesn't just bounce between two highly-weighted pheromones.
+        Currently the method just cuts these weights in half, but there are other methods that could be implemented
+        to accomplish the same task.
+        :param threshold: The threshold at which any weight equal to or above it will be reduced.
+        :param weights: The weights to test.
+        :return: A list of altered weights.
+        """
+        for weight_index in range(0, len(weights)):
+            if weights[weight_index] >= threshold:
+                weights[weight_index] = weights[weight_index] / 2
+        return weights
+
+    def calculate_step_weights(self, possible_steps):
+        """
+        A method to calculate appropriate probability weights for each possible step the ant may take next.
+        :param possible_steps: A list of coordinate tuples of length i representing the possible next steps the
+        ant may take.
+        :return: A list of weights of length i representing the probability that the ant should take that step.
+        """
         step_weights = []
         for cell in possible_steps:
             if self.model.is_ant_in_cell(cell):
                 step_weights.append(0)
             else:
                 if self.model.is_pheromone_in_cell(cell):
-                    step_weights.append(self.model.get_pheromone_in_cell(cell).tracks)
+                    step_weights.append(self.pheromone_step_weight * self.model.get_pheromone_in_cell(cell).tracks)
                 else:
                     step_weights.append(1)
 
-        # Split the highest step weight above a threshold to avoid potential loops
-        weight_threshold = 20
-        if max(step_weights) > weight_threshold:
-            step_weights[step_weights.index(max(step_weights))] = np.ceil(step_weights.index(max(step_weights)) / 2)
-
+        """
         # Weight the neighboring cell nearest to the closest colony a little extra so we have a higher
         # probability of traveling in that direction.
-        colony_weight = max(step_weights)
+        # This step in particular takes up huge amounts of calculation power and time.
+        colony_weight = max(step_weights) * self.colony_step_weight
         closest_colony_location = self.model.get_closest_colony(self).pos
-        closest_neighbor = self.model.get_next_cell_in_direction_of_location(closest_colony_location, possible_steps)
+        closest_neighbor = self.model.get_nearest_cell_to_goal(closest_colony_location, possible_steps)
         closest_neighbor_index = possible_steps.index(closest_neighbor)
         step_weights[closest_neighbor_index] = \
             step_weights[closest_neighbor_index] + colony_weight if step_weights[closest_neighbor_index] != 0 else 0
-
-        # Drop a pheromone at our current position
-        self.drop_pheromone(self.pos)
-        # Choose a new position and move there
-        new_position = random.choices(possible_steps, weights=step_weights, k=1)[0]
-        self.model.grid.move_agent(self, new_position)
+        """
+        return step_weights
 
     def drop_pheromone(self, grid_location):
         """
@@ -86,6 +135,14 @@ class LNiger(Ant):
         :return: None
         """
         self.model.drop_pheromone(grid_location)
+
+    def get_number_colonies_nearby(self, radius):
+        """
+        Gets the number of aphid colonies nearby self in radius 'radius'.
+        :param radius: Number of cells outward to search.
+        :return: int
+        """
+        return self.model.get_number_of_agents_in_radius(self.pos, radius, Colony)
 
     def get_number_nestmates_nearby(self, radius):
         """
@@ -108,44 +165,59 @@ class LNiger(Ant):
         Updates our aggressiveness state.
         :return: None
         """
-        if self.get_number_threats_nearby(2) == 0:
+        if self.get_number_threats_nearby(self.threat_search_radius) == 0:
             self.aggro_state = AggroState.NO_THREAT
             return
+        else:
+            self.aggro_state = AggroState.FLEE
+            return
 
-    def update_trail_state(self):
+    def get_average_number_surrounding_pheromones(self, radius=1):
         """
-        Updates our trail state - i.e. light, medium, or heavy.
-        :return: None
+        A method that returns the average of all the pheromone counts within a circle of radius radius.
+        :return: The average number of surrounding pheromones, rounded up to the closest int.
         """
-        pheromones_on_grid = self.mode.get_all_of_agent_type(LNPheromone)
-        pheromone_counts = [t.trails for t in pheromones_on_grid]
-        max_pher = max(pheromone_counts)
-        light_limit = max_pher / 3
-        medium_limit = light_limit * 2
-        heavy_limit = max_pher
-
         total_surrounding_pher = 0
         surrounding_pher_count = 0
-        for agent in self.model.grid.get_neighbors(self.pos):
+        for agent in self.model.grid.get_neighbors(self.pos, moore=True, radius=radius):
             if isinstance(agent, LNPheromone):
                 total_surrounding_pher += agent.tracks
                 surrounding_pher_count += 1
-        average_surrounding_pher = total_surrounding_pher / surrounding_pher_count
+        average_surrounding_pher = np.ceil(total_surrounding_pher / surrounding_pher_count)
+        return average_surrounding_pher
 
-        if average_surrounding_pher <= light_limit:
-            self.trail_state = TrailState.LIGHT
-        elif light_limit < average_surrounding_pher <= medium_limit:
-            self.trail_state = TrailState.MEDIUM
-        elif medium_limit < average_surrounding_pher:
-            self.trail_state = TrailState.HEAVY
+    def update_activity_state(self):
+        """
+        Updates our activity state - are we traveling on a light, medium, or heavy trail or are we tending a colony.
+        :return: None
+        """
+        # Check if we're actively tending any colonies and, if so, what type of colony.
+        if self.get_number_colonies_nearby(self.colony_search_radius) > 0:
+            closest_colony = self.model.get_closest_colony(self)
+            if isinstance(closest_colony, FTropicalisColony):
+                self.activity_state = ActivityState.TEND_FT
+            if isinstance(closest_colony, MKuricolaColony):
+                self.activity_state = ActivityState.TEND_MK
+            return
+
+        # If we're not tending colonies, see how we're traveling.
+        average_surrounding_pher = self.get_average_number_surrounding_pheromones()
+        if average_surrounding_pher in LIGHT_TRAIL_INTERVAL:
+            self.activity_state = ActivityState.TRAVEL_LIGHT
+        elif average_surrounding_pher in MEDIUM_TRAIL_INTERVAL:
+            self.activity_state = ActivityState.TRAVEL_MEDIUM
+        elif average_surrounding_pher in HEAVY_TRAIL_INTERVAL:
+            self.activity_state = ActivityState.TRAVEL_HEAVY
+        else:
+            self.activity_state = ActivityState.TRAVEL_SOLO
 
     def update_state(self):
         """
         Update our internal state. We update our trail state first because our agressiveness,
-        depending on the factors we are considering, may depend on what type of trail we are on.
-        :return:
+        depending on the factors we are considering, may depend on what type of trail we are on.z
+        :return: None
         """
-        self.update_trail_state()
+        self.update_activity_state()
         self.update_aggro_state()
 
 
@@ -175,7 +247,7 @@ class FJaponica(Ant):
 
         # We want to aim towards L. Niger ants.
         closest_prey_location = self.model.get_closest_agent_of_type(self, LNiger).pos
-        closest_neighbor = self.model.get_next_cell_in_direction_of_location(closest_prey_location, possible_steps)
+        closest_neighbor = self.model.get_nearest_cell_to_goal(closest_prey_location, possible_steps)
         closest_neighbor_index = possible_steps.index(closest_neighbor)
         step_weights[closest_neighbor_index] = prey_weight if step_weights[closest_neighbor_index] != 0 else 0
 
