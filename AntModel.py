@@ -28,11 +28,6 @@ class AntModel(Model):
         self.schedule = RandomActivation(self)
         self.running = True
 
-        for i in range(self.num_ln):
-            ant = LNiger(uuid4(), self)
-            self.schedule.add(ant)
-            self.grid.place_agent(ant, self.grid.find_empty())
-
         for h in range(self.num_fj):
             ant = FJaponica(uuid4(), self)
             self.schedule.add(ant)
@@ -47,6 +42,12 @@ class AntModel(Model):
             colony = FTropicalisColony(uuid4(), self)
             self.schedule.add(colony)
             self.grid.place_agent(colony, self.grid.find_empty())
+
+        for i in range(self.num_ln):
+            ant = LNiger(uuid4(), self)
+            self.schedule.add(ant)
+            self.grid.place_agent(ant, self.grid.find_empty())
+            ant._init_post_place()
 
         self.data_collector = DataCollector(model_reporters={},
                                             agent_reporters={"State, Aggressiveness": ant_state_collector})

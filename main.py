@@ -3,17 +3,18 @@ from mesa.visualization.ModularVisualization import ModularServer
 from mesa.visualization.UserParam import UserSettableParameter
 from AntModel import *
 from Portrayals import agent_portrayal
+from time import time
 
 VISUALIZE_MODEL = False
 
 # Default settings
-STEP_COUNT = 100
+STEP_COUNT = 10
 NUM_LNIGER = 300
-NUM_FJAPON = 0
-NUM_MK_COL = 3
-NUM_FT_COL = 3
-GRID_WIDTH = 100
-GRID_HEIGHT = 100
+NUM_FJAPON = 10
+NUM_MK_COL = 5
+NUM_FT_COL = 5
+GRID_WIDTH = 200
+GRID_HEIGHT = 200
 
 
 def main():
@@ -43,13 +44,20 @@ def main():
         server.port = 8521
         server.launch()
     else:
+        print("Model Initialization")
+        s = time()
         model = AntModel(NUM_LNIGER, NUM_FJAPON, NUM_MK_COL, NUM_FT_COL, GRID_WIDTH, GRID_HEIGHT)
+        e = time()
+        print(e-s)
         for i in range(STEP_COUNT):
-            model.step()
             print("Step", i)
+            s = time()
+            model.step()
+            e = time()
+            print(e-s)
         df = model.data_collector.get_agent_vars_dataframe()
         df = df.dropna(axis=0)
-        print(df)
+        df.to_csv(path_or_buf="out.csv")
 
     return 0
 

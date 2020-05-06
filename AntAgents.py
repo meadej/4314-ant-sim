@@ -43,7 +43,7 @@ class LNiger(Ant):
         self.activity_state = ActivityState.TRAVEL_SOLO
 
         # A variable describing how attracted this ant is to aphid colonies and regular pheromones
-        self.colony_step_weight = 3
+        self.colony_step_weight = 4
         self.pheromone_step_weight = 3
 
         # A variable describing the radius from which this ant will identify a threat
@@ -53,7 +53,15 @@ class LNiger(Ant):
         self.nestmate_search_radius = 2
 
         # A variable describing the radius an ant has to be at from a colony to be "tending" that colony
-        self.colony_search_radius = 2
+        self.colony_tending_radius = 2
+
+    def _init_post_place(self):
+        """
+        An initialization method to be run after the agent is placed.
+        :return: None
+        """
+        # Gets the colony closest to its initial position
+        self.closest_colony_location = self.model.get_closest_colony(self).pos
 
     def step(self):
         """
@@ -115,17 +123,16 @@ class LNiger(Ant):
                 else:
                     step_weights.append(1)
 
-        """
         # Weight the neighboring cell nearest to the closest colony a little extra so we have a higher
         # probability of traveling in that direction.
         # This step in particular takes up huge amounts of calculation power and time.
         colony_weight = max(step_weights) * self.colony_step_weight
-        closest_colony_location = self.model.get_closest_colony(self).pos
-        closest_neighbor = self.model.get_nearest_cell_to_goal(closest_colony_location, possible_steps)
+
+        closest_neighbor = self.model.get_nearest_cell_to_goal(self.closest_colony_location, possible_steps)
         closest_neighbor_index = possible_steps.index(closest_neighbor)
         step_weights[closest_neighbor_index] = \
             step_weights[closest_neighbor_index] + colony_weight if step_weights[closest_neighbor_index] != 0 else 0
-        """
+
         return step_weights
 
     def drop_pheromone(self, grid_location):
@@ -162,15 +169,29 @@ class LNiger(Ant):
 
     def update_aggro_state(self):
         """
-        Updates our aggressiveness state.
+        Updates our aggressiveness state. This is where the probability magic happens.
         :return: None
         """
+        # The following probability data was all gathered from Sakata and Katayama's paper.
+        weights = ()
         if self.get_number_threats_nearby(self.threat_search_radius) == 0:
+            # No threats around
             self.aggro_state = AggroState.NO_THREAT
             return
-        else:
-            self.aggro_state = AggroState.FLEE
-            return
+        elif self.activity_state == ActivityState.TRAVEL_SOLO:
+            weights = (0.45, 0.2, 0.1, 0.1, 0.15, 0.0)
+        elif self.activity_state == ActivityState.TRAVEL_LIGHT:
+            weights = (0.32, 0.32, 0.1, 0.12, 0.14, 0.0)
+        elif self.activity_state == ActivityState.TRAVEL_MEDIUM:
+            weights = (0.21, 0.18, 0.22, 0.1, 0.23, 0.05)
+        elif self.activity_state == ActivityState.TRAVEL_HEAVY:
+            weights = (0.12, 0.2, 0.12, 0.08, 0.48, 0.0)
+        elif self.activity_state == ActivityState.TEND_MK:
+            weights = (0.12, 0.08, 0.12, 0.13, 0.45, 0.1)
+        elif self.activity_state == ActivityState.TEND_FT:
+            weights = (0.02, 0.03, 0.07, 0.02, 0.64, 0.22)
+
+        self.aggro_state = random.choices(list(AggroState), weights=weights, k=1)
 
     def get_average_number_surrounding_pheromones(self, radius=1):
         """
@@ -192,7 +213,7 @@ class LNiger(Ant):
         :return: None
         """
         # Check if we're actively tending any colonies and, if so, what type of colony.
-        if self.get_number_colonies_nearby(self.colony_search_radius) > 0:
+        if self.get_number_colonies_nearby(self.colony_tending_radius) > 0:
             closest_colony = self.model.get_closest_colony(self)
             if isinstance(closest_colony, FTropicalisColony):
                 self.activity_state = ActivityState.TEND_FT
