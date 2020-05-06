@@ -6,15 +6,16 @@ from Portrayals import agent_portrayal
 from time import time
 
 VISUALIZE_MODEL = False
+NUM_SIMS = 5
 
 # Default settings
-STEP_COUNT = 10
+STEP_COUNT = 1000
 NUM_LNIGER = 300
-NUM_FJAPON = 10
-NUM_MK_COL = 5
-NUM_FT_COL = 5
-GRID_WIDTH = 200
-GRID_HEIGHT = 200
+NUM_FJAPON = 100
+NUM_MK_COL = 20
+NUM_FT_COL = 20
+GRID_WIDTH = 100
+GRID_HEIGHT = 100
 
 
 def main():
@@ -44,20 +45,29 @@ def main():
         server.port = 8521
         server.launch()
     else:
-        print("Model Initialization")
-        s = time()
-        model = AntModel(NUM_LNIGER, NUM_FJAPON, NUM_MK_COL, NUM_FT_COL, GRID_WIDTH, GRID_HEIGHT)
-        e = time()
-        print(e-s)
-        for i in range(STEP_COUNT):
-            print("Step", i)
+        for j in range(NUM_SIMS):
+            sim_time_sum = 0
+            print("Model Initialization #", str(j))
             s = time()
-            model.step()
+            model = AntModel(NUM_LNIGER, NUM_FJAPON, NUM_MK_COL, NUM_FT_COL, GRID_WIDTH, GRID_HEIGHT)
             e = time()
+            sim_time_sum += e - s
             print(e-s)
-        df = model.data_collector.get_agent_vars_dataframe()
-        df = df.dropna(axis=0)
-        df.to_csv(path_or_buf="out.csv")
+            for i in range(STEP_COUNT):
+                if i % 10 == 0:
+                    print(j, "Step", i)
+
+                s = time()
+                model.step()
+                e = time()
+                sim_time_sum += e - s
+
+                if i % 10 == 0:
+                    print(e-s)
+            print("Model #", str(j), "complete. Total time", str(sim_time_sum))
+            df = model.data_collector.get_agent_vars_dataframe()
+            df = df.dropna(axis=0)
+            df.to_csv(path_or_buf="out" + str(j) + ".csv")
 
     return 0
 

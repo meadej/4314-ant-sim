@@ -6,6 +6,7 @@ from AphidAgents import *
 LIGHT_TRAIL_INTERVAL = range(6, 15)
 MEDIUM_TRAIL_INTERVAL = range(51, 64)
 HEAVY_TRAIL_INTERVAL = range(98, 127)
+BASE_MODEL_SWITCH = 1
 
 
 class ActivityState(Enum):
@@ -54,6 +55,9 @@ class LNiger(Ant):
 
         # A variable describing the radius an ant has to be at from a colony to be "tending" that colony
         self.colony_tending_radius = 2
+
+        # Variable describing the number of "nearby" nestmates
+        self.nearby_nestmates = 0
 
     def _init_post_place(self):
         """
@@ -167,12 +171,12 @@ class LNiger(Ant):
         """
         return self.model.get_number_of_agents_in_radius(self.pos, radius, FJaponica)
 
-    def update_aggro_state(self):
+    def update_aggro_state_base_model(self):
         """
-        Updates our aggressiveness state. This is where the probability magic happens.
+        Updates our aggressiveness state. 
+        The following probability data was all gathered from Sakata and Katayama's paper.
         :return: None
         """
-        # The following probability data was all gathered from Sakata and Katayama's paper.
         weights = ()
         if self.get_number_threats_nearby(self.threat_search_radius) == 0:
             # No threats around
@@ -191,7 +195,20 @@ class LNiger(Ant):
         elif self.activity_state == ActivityState.TEND_FT:
             weights = (0.02, 0.03, 0.07, 0.02, 0.64, 0.22)
 
-        self.aggro_state = random.choices(list(AggroState), weights=weights, k=1)
+        self.aggro_state = random.choices(list(AggroState)[1:], weights=weights, k=1)
+
+    def update_aggro_state_new_model(self):
+        return
+
+    def update_aggro_state(self):
+        """
+        Updates our aggressiveness state. This is where the probability magic happens.
+        :return: None
+        """
+        if BASE_MODEL_SWITCH:
+            self.update_aggro_state_base_model()
+        else:
+            self.update_aggro_state_new_model()
 
     def get_average_number_surrounding_pheromones(self, radius=1):
         """
@@ -240,6 +257,7 @@ class LNiger(Ant):
         """
         self.update_activity_state()
         self.update_aggro_state()
+        self.nearby_nestmates = self.get_number_nestmates_nearby(self.nestmate_search_radius)
 
 
 class FJaponica(Ant):
@@ -258,19 +276,12 @@ class FJaponica(Ant):
         )
 
         step_weights = []
-        prey_weight = 3
         for cell in possible_steps:
             # Do not move to a neighboring cell with another ant already in it
             if self.model.is_ant_in_cell(cell):
                 step_weights.append(0)
             else:
                 step_weights.append(1)
-
-        # We want to aim towards L. Niger ants.
-        closest_prey_location = self.model.get_closest_agent_of_type(self, LNiger).pos
-        closest_neighbor = self.model.get_nearest_cell_to_goal(closest_prey_location, possible_steps)
-        closest_neighbor_index = possible_steps.index(closest_neighbor)
-        step_weights[closest_neighbor_index] = prey_weight if step_weights[closest_neighbor_index] != 0 else 0
 
         # Choose a new position and move there
         new_position = random.choices(possible_steps, weights=step_weights, k=1)[0]

@@ -3,13 +3,13 @@ from AntModel import AntModel
 from DataCollection import ant_state_collector
 
 # Default settings
-STEP_COUNT = 100
+STEP_COUNT = 300
 NUM_LNIGER = 300
-NUM_FJAPON = 0
-NUM_MK_COL = 3
-NUM_FT_COL = 3
-GRID_WIDTH = 100
-GRID_HEIGHT = 100
+NUM_FJAPON = 30
+NUM_MK_COL = 5
+NUM_FT_COL = 5
+GRID_WIDTH = 150
+GRID_HEIGHT = 150
 
 fixed_params = {"width": GRID_WIDTH,
                 "height": GRID_HEIGHT,
@@ -26,4 +26,4 @@ batch_run = BatchRunner(AntModel,
                         agent_reporters={"State:": ant_state_collector})
 batch_run.run_all()
 df = batch_run.get_agent_vars_dataframe()
-print(df)
+df.to_csv(path_or_buf="out.csv")
