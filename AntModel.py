@@ -7,6 +7,7 @@ from uuid import uuid4
 import numpy as np
 from mesa.datacollection import DataCollector
 from DataCollection import ant_state_collector
+import json
 
 
 class AntModel(Model):
@@ -50,7 +51,8 @@ class AntModel(Model):
             ant._init_post_place()
 
         self.data_collector = DataCollector(model_reporters={},
-                                            agent_reporters={"State, Aggressiveness": ant_state_collector})
+                                            agent_reporters={"states": ant_state_collector})
+        self.weights_dict = json.load(open("newout.json","r"))
 
     def drop_pheromone(self, location):
         """

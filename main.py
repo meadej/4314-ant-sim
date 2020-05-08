@@ -5,13 +5,13 @@ from AntModel import *
 from Portrayals import agent_portrayal
 from time import time
 
-VISUALIZE_MODEL = False
-NUM_SIMS = 5
+VISUALIZE_MODEL = True
+NUM_SIMS = 25
 
 # Default settings
-STEP_COUNT = 1000
+STEP_COUNT = 500
 NUM_LNIGER = 300
-NUM_FJAPON = 100
+NUM_FJAPON = 150
 NUM_MK_COL = 20
 NUM_FT_COL = 20
 GRID_WIDTH = 100
@@ -67,7 +67,7 @@ def main():
             print("Model #", str(j), "complete. Total time", str(sim_time_sum))
             df = model.data_collector.get_agent_vars_dataframe()
             df = df.dropna(axis=0)
-            df.to_csv(path_or_buf="out" + str(j) + ".csv")
+            df.to_csv(path_or_buf="raw_new/out" + str(j) + ".csv")
 
     return 0
 
